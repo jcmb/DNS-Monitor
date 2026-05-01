@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import time
 import threading
 import argparse
@@ -42,18 +44,18 @@ def poll_dns():
         try:
             answers = dns.resolver.resolve(TARGET_DOMAIN, 'A')
             ips = [rdata.address for rdata in answers]
-            
+
             if ips:
                 primary_ip = ips[0]
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
+
                 # Open DB connection for this thread's operation
                 conn = sqlite3.connect(DB_FILE, timeout=10)
                 cursor = conn.cursor()
-                
+
                 for ip in ips:
                     is_primary = 1 if ip == primary_ip else 0
-                    
+
                     # Upsert (Insert or Update) the IP record
                     cursor.execute('''
                         INSERT INTO ip_stats (domain, ip_address, primary_count, last_seen)
@@ -62,18 +64,18 @@ def poll_dns():
                             primary_count = primary_count + ?,
                             last_seen = excluded.last_seen
                     ''', (TARGET_DOMAIN, ip, is_primary, now_str, is_primary))
-                
+
                 conn.commit()
                 conn.close()
-                
+
                 # Only print to console if the verbose flag was passed
                 if VERBOSE:
                     print(f"[{now_str}] Checked {TARGET_DOMAIN}. Primary: {primary_ip} (Total IPs: {len(ips)})")
-                
+
         except Exception as e:
             if VERBOSE:
                 print(f"DNS query failed for {TARGET_DOMAIN}: {e}")
-        
+
         time.sleep(POLL_INTERVAL)
 
 # --- Web UI / API ---
@@ -97,7 +99,7 @@ HTML_TEMPLATE = """
     <div class="container">
         <h1>DNS Monitor: {{ domain }}</h1>
         <div class="stat"><strong>Current Session Uptime:</strong> <span id="uptime">Loading...</span></div>
-        
+
         <table>
             <thead>
                 <tr>
@@ -118,10 +120,10 @@ HTML_TEMPLATE = """
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('uptime').innerText = data.uptime;
-                    
+
                     const tbody = document.getElementById('ip-table-body');
                     tbody.innerHTML = '';
-                    
+
                     if (data.ips.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="3">No IPs discovered yet.</td></tr>';
                         return;
@@ -153,27 +155,27 @@ def index():
 def stats():
     """API endpoint to fetch data from the SQLite database."""
     uptime_td = datetime.now() - app_start_time
-    uptime_str = str(uptime_td).split('.')[0] 
-    
+    uptime_str = str(uptime_td).split('.')[0]
+
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
+
     cursor.execute('''
-        SELECT ip_address, primary_count, last_seen 
-        FROM ip_stats 
-        WHERE domain = ? 
+        SELECT ip_address, primary_count, last_seen
+        FROM ip_stats
+        WHERE domain = ?
         ORDER BY ip_address ASC
     ''', (TARGET_DOMAIN,))
-    
+
     rows = cursor.fetchall()
     conn.close()
-    
+
     ip_data = [
         {"ip": row["ip_address"], "primary_count": row["primary_count"], "last_seen": row["last_seen"]}
         for row in rows
     ]
-    
+
     return jsonify({
         "uptime": uptime_str,
         "ips": ip_data
@@ -197,12 +199,12 @@ if __name__ == '__main__':
 
     poller_thread = threading.Thread(target=poll_dns, daemon=True)
     poller_thread.start()
-    
+
     print(f"Data is being saved to local database: {DB_FILE}")
     print(f"Starting web UI for {TARGET_DOMAIN} on http://{BIND_HOST}:{WEB_PORT}")
     if not VERBOSE:
         print("Running in quiet mode. Use -v or --verbose to see DNS query logs.")
-        
+
     # Using Waitress to serve the app eliminates the development server warning
     # and automatically suppresses the spammy HTTP access logs.
     serve(app, host=BIND_HOST, port=WEB_PORT)
