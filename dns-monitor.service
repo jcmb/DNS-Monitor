@@ -1,0 +1,28 @@
+[Unit]
+Description=DNS Round Robin Monitor Service
+After=network.target
+
+[Service]
+# The user and group that the service should run as.
+# It is best practice NOT to run this as root. Change "ubuntu" to your actual username.
+User=admin
+Group=admin
+
+# The directory where dns_monitor.py and dns_monitor.db live
+WorkingDirectory=/path/to/your/dns_monitor_folder
+
+# The command to start the app.
+# Use the absolute path to your Python executable (especially if using a virtual environment).
+# You can append your arguments here as well.
+ExecStart=/usr/bin/python3 /path/to/your/dns_monitor_folder/dns_monitor.py --host 0.0.0.0 --port 7001
+
+# Automatically restart the service if it crashes
+Restart=always
+RestartSec=5
+
+# Helps ensure Python output isn't buffered so it shows up in the logs immediately
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+# Tells systemd to start this service when the system reaches the standard multi-user state (normal boot)
+WantedBy=multi-user.target
